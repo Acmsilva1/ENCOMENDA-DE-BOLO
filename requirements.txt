@@ -1,0 +1,5 @@
+streamlit
+gspread
+pandas
+numpy # Pandas geralmente precisa dele
+streamlit-autorefresh
