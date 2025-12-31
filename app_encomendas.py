@@ -8,36 +8,41 @@ from streamlit_autorefresh import st_autorefresh
 
 # --- CONFIGURAÇÕES DA CONFEITARIA DIGITAL ---
 
-# ID da Planilha no seu Google Drive (SEU NOVO ID)
+# ID da Planilha no seu Google Drive 
 PLANILHA_ID = "141mq4MZ8q60H_-wFb1_MuX8dXa4YEjHMYI3BjNUPT3Y" 
-ABA_NOME = "ENCOMENDAS" # O nome exato da sua aba
+ABA_NOME = "ENCOMENDAS" 
 
-# Mapeamento de Colunas (DE: Coluna Antiga, PARA: Coluna Nova do Bolo)
-# Isso garante que a lógica CRUD continue funcionando no Streamlit, mas com os nomes da sua planilha.
+# 🚨 DEFINIÇÃO EXATA DAS SUAS COLUNAS NO GOOGLE SHEETS 🚨
+# AGORA APENAS COM OS CAMPOS DE REGISTRO ESSENCIAIS
+COLUNAS_SHEET_NOMES = [
+    "ID_ENCOMENDA",  
+    "Nome",
+    "Sabor",
+    "Torre e APT",
+    "Data",
+    "Horario",
+    "Status"
+]
+
+# Mapeamento de Colunas Internas (Sem Prioridade)
 COLUNAS_SHEET = {
-    'id_evento': 'ID_ENCOMENDA',  # Chave única para controle
-    'titulo': 'Nome',             # Nome do cliente
-    'descricao': 'Sabor',         # Sabor do bolo (agora é a descrição!)
-    'data_evento': 'Data',        # Data da entrega
-    'hora_evento': 'Horario',     # Horário da entrega
-    'local': 'Torre e APT',       # Local virou Torre/APT
-    'prioridade': 'Prioridade',   # Prioridade (mantemos para gestão de tempo)
-    'status': 'Status'            # Status (Pendente/Entregue)
+    'id_evento': 'ID_ENCOMENDA', 
+    'titulo': 'Nome',             
+    'descricao': 'Sabor',         
+    'data_evento': 'Data',        
+    'hora_evento': 'Horario',     
+    'local': 'Torre e APT',       
+    'status': 'Status'            
 }
-
-# Invertemos o mapeamento para usar nas funções de leitura e exibição
+# Invertemos o mapeamento para renomear DE Sheets PARA Interno
 COLUNAS_INVERTIDAS = {v: k for k, v in COLUNAS_SHEET.items()}
-COLUNAS_EXIBICAO = list(COLUNAS_SHEET.values())
 
 # --- CONFIGURAÇÃO DA GOVERNANÇA (Conexão Segura e Resiliente) ---
-# O seu código de conexão estava perfeito! Manteremos o retry e o cache.
-
 @st.cache_resource
 def conectar_sheets():
     """Tenta conectar ao Google Sheets usando Streamlit Secrets com lógica de Retentativa."""
     MAX_RETRIES = 3
     
-    # Inicia a lógica de retry
     for attempt in range(MAX_RETRIES):
         try:
             # st.secrets["gspread"] vem do arquivo secrets.toml
@@ -60,21 +65,25 @@ def conectar_sheets():
     return None
 
 
-# --- FUNÇÕES CORE DO CRUD (Adaptadas para Encomendas) ---
+# --- FUNÇÕES CORE DO CRUD (Adaptadas e Sem Prioridade) ---
 
-# R (Read) - Lê todos os eventos
+# R (Read) - Lê todos os eventos (RESILIENTE)
 def carregar_eventos(sheet):
-    """Lê todos os registros e retorna como DataFrame."""
+    """Lê todos os registros usando get_all_values e cria o DataFrame à força."""
     
     if sheet is None:
          return pd.DataFrame()
          
     try:
-        dados = sheet.get_all_records()
-        df = pd.DataFrame(dados)
+        dados_brutos = sheet.get_all_values() 
         
-        # Garante que o DataFrame tem as colunas esperadas para o CRUD
-        # Renomeia as colunas do Sheets (Nome, Sabor...) para as chaves internas (titulo, descricao...)
+        if not dados_brutos:
+            return pd.DataFrame()
+
+        # Usamos o cabeçalho definido para criar o DF (ignora a linha 1 do Sheets, se for cabeçalho)
+        df = pd.DataFrame(data=dados_brutos[1:], columns=COLUNAS_SHEET_NOMES)
+        
+        # Renomeia as colunas do Sheets para as chaves internas 
         df.rename(columns=COLUNAS_INVERTIDAS, inplace=True) 
         
         return df
@@ -84,35 +93,34 @@ def carregar_eventos(sheet):
 
 # C (Create) - Adiciona uma nova encomenda
 def adicionar_evento(sheet, dados_do_form):
-    """Insere uma nova linha de encomenda no Sheets, usando a ordem correta das colunas."""
+    """Insere uma nova linha de encomenda no Sheets, sem o campo Prioridade."""
     
-    # ORDEM DA PLANILHA: ID_ENCOMENDA, Nome, Sabor, Torre e APT, Data, Horario, Prioridade, Status
+    # ORDEM DA PLANILHA (SEGUINDO COLUNAS_SHEET_NOMES)
     nova_linha = [
         dados_do_form.get('id_evento'),
-        dados_do_form.get('titulo'),
-        dados_do_form.get('descricao'),
-        dados_do_form.get('local'),       # Mapeado para Torre e APT
+        dados_do_form.get('titulo'),      # Nome
+        dados_do_form.get('descricao'),   # Sabor
+        dados_do_form.get('local'),       # Torre e APT
         dados_do_form.get('data_evento'),
         dados_do_form.get('hora_evento'),
-        dados_do_form.get('prioridade'),
+        # Prioridade foi removida aqui
         dados_do_form.get('status')
     ]
     
     sheet.append_row(nova_linha, value_input_option='USER_ENTERED')
-    st.success("🎉 Encomenda de bolo registrada. Mais um doce compromisso. **A lista abaixo será atualizada automaticamente em 20 segundos.**")
+    st.success("🎉 Encomenda de bolo registrada. **A lista abaixo será atualizada automaticamente em 20 segundos.**")
     conectar_sheets.clear()
 
 # U (Update) - Atualiza uma encomenda existente
 def atualizar_evento(sheet, id_evento, novos_dados):
-    """Busca a linha pelo ID e atualiza os dados da linha."""
+    """Busca a linha pelo ID e atualiza os dados da linha, sem o campo Prioridade."""
     try:
-        # Nota: O gspread busca pelo conteúdo da célula. Precisamos da coluna do ID.
-        coluna_id = COLUNAS_SHEET['id_evento'] # 'ID_ENCOMENDA'
-        cell = sheet.find(id_evento, in_column=sheet.col_values(1).index(coluna_id) + 1) # Encontra na coluna 1 (A)
+        coluna_id_index = COLUNAS_SHEET_NOMES.index(COLUNAS_SHEET['id_evento']) + 1 
+        cell = sheet.find(id_evento, in_column=coluna_id_index)
 
         linha_index = cell.row 
 
-        # ORDEM DA PLANILHA: ID_ENCOMENDA, Nome, Sabor, Torre e APT, Data, Horario, Prioridade, Status
+        # ORDEM DA PLANILHA (SEGUINDO COLUNAS_SHEET_NOMES)
         valores_atualizados = [
             novos_dados['id_evento'],
             novos_dados['titulo'],
@@ -120,14 +128,14 @@ def atualizar_evento(sheet, id_evento, novos_dados):
             novos_dados['local'],
             novos_dados['data_evento'],
             novos_dados['hora_evento'],
-            novos_dados['prioridade'],
+            # Prioridade foi removida aqui
             novos_dados['status']
         ]
 
         # Atualiza a linha completa a partir da coluna A
         sheet.update(f'A{linha_index}:{chr(ord("A") + len(valores_atualizados)-1)}{linha_index}', [valores_atualizados])
         
-        st.success(f"🔄 Encomenda {id_evento[:8]}... atualizada. Foco no sabor. **A lista será atualizada automaticamente em 20 segundos.**") 
+        st.success(f"🔄 Encomenda {id_evento[:8]}... atualizada. **A lista será atualizada automaticamente em 20 segundos.**") 
         conectar_sheets.clear()
         return True
 
@@ -142,13 +150,13 @@ def atualizar_evento(sheet, id_evento, novos_dados):
 def deletar_evento(sheet, id_evento):
     """Busca a linha pelo ID e a deleta."""
     try:
-        coluna_id = COLUNAS_SHEET['id_evento'] # 'ID_ENCOMENDA'
-        cell = sheet.find(id_evento, in_column=sheet.col_values(1).index(coluna_id) + 1) # Encontra na coluna 1 (A)
+        coluna_id_index = COLUNAS_SHEET_NOMES.index(COLUNAS_SHEET['id_evento']) + 1 
+        cell = sheet.find(id_evento, in_column=coluna_id_index)
         
         linha_index = cell.row
 
         sheet.delete_rows(linha_index)
-        st.success(f"🗑️ Encomenda {id_evento[:8]}... deletada. Bolo cancelado, menos estresse. **A lista será atualizada automaticamente em 20 segundos.**")
+        st.success(f"🗑️ Encomenda {id_evento[:8]}... deletada. **A lista será atualizada automaticamente em 20 segundos.**")
         conectar_sheets.clear()
         return True
     except gspread.exceptions.CellNotFound:
@@ -187,17 +195,16 @@ with st.form("form_nova_encomenda", clear_on_submit=True):
         data_entrega = st.date_input("Data de Entrega:", date.today(), format="DD/MM/YYYY") 
     
     with col2:
-        # Mapeado para 'prioridade'
-        opcoes_prioridade = ["Média", "Alta", "Baixa"]
-        prioridade = st.selectbox("Prioridade de Produção:", opcoes_prioridade)
-        
         # Mapeado para 'hora_evento'
         hora_entrega = st.time_input("Horário Combinado:", time(9, 0)) 
         
         # Mapeado para 'status'
         opcoes_status_inicial = ['Pendente', 'Rascunho']
         status_inicial = st.selectbox("Status Inicial:", opcoes_status_inicial)
-    
+        
+        # Coluna de espaço para alinhar (Prioridade foi removida daqui)
+        st.write("") 
+        
     # Mapeado para 'descricao' (Sabor do Bolo)
     sabor_bolo = st.text_area("SABOR do Bolo / DETALHES da Decoração:")
     
@@ -213,7 +220,7 @@ with st.form("form_nova_encomenda", clear_on_submit=True):
                 'data_evento': data_entrega.strftime('%Y-%m-%d'), 
                 'hora_evento': hora_entrega.strftime('%H:%M'),
                 'local': torre_apt,
-                'prioridade': prioridade,
+                # Prioridade removida aqui
                 'status': status_inicial
             }
             adicionar_evento(sheet, dados_para_sheet)
@@ -241,9 +248,11 @@ else:
     df_display = df_encomendas.copy()
     
     # Formatação de Data/Hora para exibição
-    if 'data_evento' in df_display.columns:
+    try:
         df_display['data_evento'] = pd.to_datetime(df_display['data_evento'], errors='coerce').dt.strftime('%d/%m/%Y')
-    
+    except KeyError:
+        st.warning("Coluna 'data_evento' não encontrada. Verifique o cabeçalho do Sheets!")
+        
     # Renomeia as colunas internas para nomes de exibição amigáveis
     df_display.rename(columns={
         'id_evento': 'ID (Interno)', 
@@ -252,13 +261,16 @@ else:
         'local': 'Torre e APT',
         'data_evento': 'Data',
         'hora_evento': 'Hora',
-        'prioridade': 'Prioridade',
+        # Prioridade removida aqui
         'status': 'Status'
     }, inplace=True)
     
     # Exibe apenas as colunas relevantes na ordem certa
-    colunas_finais = ['Data', 'Hora', 'Nome', 'Sabor/Detalhes', 'Torre e APT', 'Status', 'Prioridade', 'ID (Interno)']
+    colunas_finais = ['Data', 'Hora', 'Nome', 'Sabor/Detalhes', 'Torre e APT', 'Status', 'ID (Interno)']
     
+    # Limpa linhas onde o ID (chave interna) seja vazio
+    df_display.dropna(subset=['ID (Interno)'], inplace=True) 
+
     # Display principal (Filtrável por data)
     st.dataframe(
         df_display[colunas_finais].sort_values(by=['Data', 'Hora'], ascending=True), 
@@ -271,25 +283,27 @@ else:
 
     if not df_encomendas.empty:
         
-        eventos_atuais = df_encomendas['id_evento'].tolist()
-        
-        # Função para formatar o SelectBox (ID + Nome)
-        def formatar_selecao(id_val):
-            # Usamos as chaves internas para buscar no DataFrame
-            nome_cliente = df_encomendas[df_encomendas['id_evento'] == id_val]['titulo'].iloc[0] 
-            data_evento = df_encomendas[df_encomendas['id_evento'] == id_val]['data_evento'].iloc[0]
-            
-            return f"{data_evento} | {nome_cliente} ({id_val[:4]}...)"
+        eventos_atuais = df_encomendas[df_encomendas['id_evento'].astype(bool)]['id_evento'].tolist()
 
-        evento_selecionado_id = st.selectbox(
-            "Selecione a Encomenda para Ação (Edição/Exclusão):",
-            options=eventos_atuais,
-            index=0 if eventos_atuais else None,
-            format_func=formatar_selecao
-        )
+        if eventos_atuais:
+            
+            def formatar_selecao(id_val):
+                nome_cliente = df_encomendas[df_encomendas['id_evento'] == id_val]['titulo'].iloc[0] 
+                data_evento = df_encomendas[df_encomendas['id_evento'] == id_val]['data_evento'].iloc[0]
+                
+                return f"{data_evento} | {nome_cliente} ({id_val[:4]}...)"
+
+            evento_selecionado_id = st.selectbox(
+                "Selecione a Encomenda para Ação (Edição/Exclusão):",
+                options=eventos_atuais,
+                index=0,
+                format_func=formatar_selecao
+            )
+        else:
+            evento_selecionado_id = None
+            st.info("Nenhum evento válido com ID encontrado para edição.")
     
     if evento_selecionado_id:
-        # Busca os dados do evento usando a chave interna ('titulo', 'descricao', etc.)
         evento_dados = df_encomendas[df_encomendas['id_evento'] == evento_selecionado_id].iloc[0]
 
         col_u, col_d = st.columns([3, 1])
@@ -297,34 +311,33 @@ else:
         with col_u:
             st.markdown("##### Atualizar Encomenda Selecionada")
             with st.form("form_update_encomenda"):
-                # Campos de Edição (Usando as chaves internas para os valores iniciais)
+                # Campos de Edição
                 novo_nome = st.text_input("NOME DO CLIENTE", value=evento_dados['titulo'])
                 novo_sabor = st.text_area("Sabor/Detalhes", value=evento_dados['descricao'])
 
-                col_data_hora, col_local_prioridade = st.columns(2)
+                col_data_hora, col_local_status = st.columns(2)
 
                 with col_data_hora:
-                    # Converte string YYYY-MM-DD para objeto date para o date_input
+                    # Converte string YYYY-MM-DD para objeto date
                     novo_data = st.date_input(
                         "Data de Entrega", 
                         value=pd.to_datetime(evento_dados['data_evento']).date(),
                         format="DD/MM/YYYY"
                     )
-                    # Converte HH:MM para objeto time para o time_input
+                    # Converte HH:MM para objeto time
                     novo_hora_str = evento_dados['hora_evento']
                     novo_hora = st.time_input("Horário Combinado", value=time(int(novo_hora_str[:2]), int(novo_hora_str[3:])))
                 
-                with col_local_prioridade:
+                with col_local_status:
                     novo_torre_apt = st.text_input("Torre e APT (ou Endereço)", value=evento_dados['local'])
-                    opcoes_prioridade_update = ["Alta", "Média", "Baixa"]
-                    novo_prioridade = st.selectbox("Prioridade de Produção", opcoes_prioridade_update, index=opcoes_prioridade_update.index(evento_dados['prioridade']))
+                    # Prioridade removida
                     opcoes_status_update = ['Pendente', 'Entregue', 'Cancelado']
                     novo_status = st.selectbox("Status", opcoes_status_update, index=opcoes_status_update.index(evento_dados['status']))
 
                 update_button = st.form_submit_button("Salvar Atualizações da Encomenda (Update)")
 
                 if update_button:
-                    # Monta o dicionário de dados atualizados com as CHAVES INTERNAS
+                    # Monta o dicionário de dados atualizados com as CHAVES INTERNAS (Sem Prioridade)
                     dados_atualizados = {
                         'id_evento': evento_selecionado_id, 
                         'titulo': novo_nome,
@@ -332,7 +345,6 @@ else:
                         'data_evento': novo_data.strftime('%Y-%m-%d'),
                         'hora_evento': novo_hora.strftime('%H:%M'),
                         'local': novo_torre_apt,
-                        'prioridade': novo_prioridade,
                         'status': novo_status
                     }
                     atualizar_evento(sheet, evento_selecionado_id, dados_atualizados)
