@@ -1,2 +1,21 @@
+# Este arquivo DEVE estar dentro de uma pasta chamada .streamlit/
+
 [theme]
-base="dark" 
+# 1. Define o tema base como "dark" (padrão escuro do Streamlit)
+base = "dark"
+
+# 2. Configurações para forçar o esquema de cores escuras:
+
+# Cor de fundo principal (o preto mais escuro)
+backgroundColor = "#0E1117"
+
+# Cor de fundo secundária (para a barra lateral e blocos de código/containers)
+secondaryBackgroundColor = "#262730"
+
+# Cor do texto principal (branco puro ou quase puro)
+textColor = "#FAFAFA"
+
+# Cor primária de destaque (botões, links, sliders). 
+# Você pode manter o padrão ou escolher sua cor favorita de TI!
+# Exemplo: F63366 é o padrão rosa/vermelho do Streamlit.
+# primaryColor = "#F63366"
