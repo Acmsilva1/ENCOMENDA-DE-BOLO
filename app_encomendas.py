@@ -235,14 +235,14 @@ st.divider()
 
 # Configuração de Auto-Refresh (A cada 20 segundos)
 st_autorefresh(interval=20000, key="data_refresh_key")
-st.info("🔄 **ATUALIZAÇÃO AUTOMÁTICA** (A cada 20 segundos). Assim você não perde a encomenda.")
+st.info("🔄 **ATUALIZAÇÃO AUTOMÁTICA** (A cada 20 segundos)")
 
-st.header("📋 MINHAS ENCOMENDAS (O Calendário da Produção)")
+st.header("📋 **MINHAS ENCOMENDAS**")
 
 df_encomendas = carregar_eventos(sheet) 
 
 if df_encomendas.empty:
-    st.info("SEM REGISTROS DE ENCOMENDAS. O forno está frio.")
+    st.info("SEM REGISTROS DE ENCOMENDAS.")
 else:
     
     df_display = df_encomendas.copy()
