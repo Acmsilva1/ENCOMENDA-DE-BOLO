@@ -6,59 +6,6 @@ from datetime import date, time
 import time as t 
 from streamlit_autorefresh import st_autorefresh 
 
-# --- FUNÇÃO PARA FORÇAR O DARK MODE VIA CSS ---
-# 🚨 AVISO: Isso é um WORKAROUND para sobrepor as configurações do Streamlit Cloud.
-def injetar_dark_mode():
-    """Injeta CSS customizado para forçar o tema escuro, ignorando o config.toml e preferência do usuário."""
-    
-    # As cores hexadecimais são baseadas no tema Dark Mode padrão do Streamlit.
-    DARK_MODE_CSS = """
-    <style>
-    /* Fundo principal e containers */
-    .stApp {
-        background-color: #0E1117; 
-        color: #FAFAFA;
-    }
-    
-    /* Fundo secundário (Sidebar, botões, caixas de texto) */
-    .css-1d391kg, .css-18e3th9, .stSelectbox, .stTextInput, .stTextArea {
-        background-color: #262730;
-        color: #FAFAFA;
-    }
-
-    /* Títulos e textos */
-    h1, h2, h3, h4, h5, h6, .stMarkdown {
-        color: #FAFAFA !important;
-    }
-
-    /* Bordas e linhas */
-    .stButton > button, .stDownloadButton > button, .stFileUploader, .stDateInput, .stTimeInput {
-        border-color: #44475A;
-        color: #FAFAFA;
-    }
-    
-    /* Estilo dos botões vermelhos (para contraste) */
-    .stButton > button:first-child {
-        background-color: #F63366; /* Streamlit default primary color */
-        color: white;
-    }
-    
-    /* Datetime Input Background (Ajuste específico) */
-    .stDateInput > div > div:nth-child(2) > div, 
-    .stTimeInput > div > div:nth-child(2) > div {
-        background-color: #262730;
-    }
-    
-    /* Info box (azul claro) */
-    .stAlert.info {
-        background-color: rgba(38, 39, 48, 0.7); /* Fundo semi-transparente escuro */
-        color: #B3D8FF; /* Texto azul claro */
-    }
-    </style>
-    """
-    st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
-
-
 # --- CONFIGURAÇÕES DA CONFEITARIA DIGITAL ---
 
 # ID da Planilha no seu Google Drive 
@@ -78,11 +25,12 @@ COLUNAS_SHEET = {
 }
 COLUNAS_INVERTIDAS = {v: k for k, v in COLUNAS_SHEET.items()}
 
-# --- FUNÇÕES CORE E CACHE (Mantidas) ---
+# --- CONFIGURAÇÃO DA GOVERNANÇA (Conexão Segura e Resiliente) ---
 @st.cache_resource
 def conectar_sheets():
-    # ... (Lógica de conexão mantida) ...
+    """Tenta conectar ao Google Sheets usando Streamlit Secrets com lógica de Retentativa."""
     MAX_RETRIES = 3
+    
     for attempt in range(MAX_RETRIES):
         try:
             gc = gspread.service_account_from_dict(st.secrets["gspread"])
@@ -90,6 +38,7 @@ def conectar_sheets():
             sheet = spreadsheet.worksheet(ABA_NOME)
             st.sidebar.success("✅ Conexão com a Confeitaria Digital (Google Sheets) estabelecida.")
             return sheet
+        
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 wait_time = 2 ** attempt
@@ -100,13 +49,18 @@ def conectar_sheets():
                 return None
     return None
 
-@st.cache_data(ttl=600)
+# --- FUNÇÕES CORE DO CRUD ---
+
+@st.cache_data(ttl=600) # Mantém no cache por 10 minutos por padrão
 def carregar_eventos(sheet):
-    # ... (Lógica de leitura mantida) ...
+    """Lê todos os registros usando get_all_values e cria o DataFrame à força."""
+    
     if sheet is None: return pd.DataFrame()
     try:
         dados_brutos = sheet.get_all_values() 
         if not dados_brutos: return pd.DataFrame()
+        
+        # Força o cabeçalho correto e ignora a primeira linha
         df = pd.DataFrame(data=dados_brutos[1:], columns=COLUNAS_SHEET_NOMES)
         df.rename(columns=COLUNAS_INVERTIDAS, inplace=True) 
         return df
@@ -115,33 +69,47 @@ def carregar_eventos(sheet):
         return pd.DataFrame()
 
 def adicionar_evento(sheet, dados_do_form):
-    # ... (Lógica de CRUD mantida) ...
-    nova_linha = [dados_do_form.get('id_evento'), dados_do_form.get('titulo'), dados_do_form.get('descricao'), dados_do_form.get('local'), dados_do_form.get('data_evento'), dados_do_form.get('hora_evento'), dados_do_form.get('status')]
+    """Insere uma nova linha de encomenda e limpa o cache de dados."""
+    nova_linha = [
+        dados_do_form.get('id_evento'), dados_do_form.get('titulo'),
+        dados_do_form.get('descricao'), dados_do_form.get('local'),
+        dados_do_form.get('data_evento'), dados_do_form.get('hora_evento'),
+        dados_do_form.get('status')
+    ]
     sheet.append_row(nova_linha, value_input_option='USER_ENTERED')
     st.success("🎉 Encomenda de bolo registrada. A lista será atualizada em breve.")
     carregar_eventos.clear() 
 
 def atualizar_evento(sheet, id_evento, novos_dados):
-    # ... (Lógica de CRUD mantida) ...
+    """Busca e atualiza a linha e limpa o cache."""
     try:
         coluna_id_index = COLUNAS_SHEET_NOMES.index(COLUNAS_SHEET['id_evento']) + 1 
         cell = sheet.find(id_evento, in_column=coluna_id_index)
         linha_index = cell.row 
-        valores_atualizados = [novos_dados['id_evento'], novos_dados['titulo'], novos_dados['descricao'], novos_dados['local'], novos_dados['data_evento'], novos_dados['hora_evento'], novos_dados['status']]
+
+        valores_atualizados = [
+            novos_dados['id_evento'], novos_dados['titulo'], novos_dados['descricao'],
+            novos_dados['local'], novos_dados['data_evento'], novos_dados['hora_evento'],
+            novos_dados['status']
+        ]
+
         sheet.update(f'A{linha_index}:{chr(ord("A") + len(valores_atualizados)-1)}{linha_index}', [valores_atualizados])
+        
         st.success(f"🔄 Encomenda {id_evento[:8]}... atualizada. A lista será atualizada em breve.") 
         carregar_eventos.clear()
         return True
+
     except Exception as e:
         st.error(f"🚫 Erro ao atualizar a encomenda: {e}")
         return False
 
 def deletar_evento(sheet, id_evento):
-    # ... (Lógica de CRUD mantida) ...
+    """Busca e deleta a linha e limpa o cache."""
     try:
         coluna_id_index = COLUNAS_SHEET_NOMES.index(COLUNAS_SHEET['id_evento']) + 1 
         cell = sheet.find(id_evento, in_column=coluna_id_index)
         linha_index = cell.row
+
         sheet.delete_rows(linha_index)
         st.success(f"🗑️ Encomenda {id_evento[:8]}... deletada. A lista será atualizada em breve.")
         carregar_eventos.clear()
@@ -154,10 +122,6 @@ def deletar_evento(sheet, id_evento):
 # --- INTERFACE STREAMLIT (UI) ---
 
 st.set_page_config(layout="wide")
-
-# 📢 Chamada para forçar o Dark Mode!
-injetar_dark_mode()
-
 st.title("🎂 AGENDA DIGITAL DE ENCOMENDAS DE BOLO")
 
 sheet = conectar_sheets()
@@ -205,6 +169,7 @@ st.divider()
 
 # === SEÇÃO 2: VISUALIZAR E GERENCIAR (R, U, D) ===
 
+# CONFIGURAÇÃO DO REFRESH DE 30 SEGUNDOS (30000 ms)
 st_autorefresh(interval=30000, key="data_refresh_key")
 st.info("🔄 **ATUALIZAÇÃO AUTOMÁTICA** (A cada 30 segundos). Mantenha a janela aberta apenas durante o uso.")
 
@@ -219,6 +184,7 @@ else:
     
     df_display = df_encomendas.copy()
     
+    # Formatação e Renomeação para exibição
     try:
         df_display['data_evento'] = pd.to_datetime(df_display['data_evento'], errors='coerce').dt.strftime('%d/%m/%Y')
     except KeyError:
