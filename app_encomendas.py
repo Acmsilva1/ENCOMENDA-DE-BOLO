@@ -155,7 +155,7 @@ with st.form("form_nova_encomenda", clear_on_submit=True):
         
     sabor_bolo = st.text_area("SABOR do Bolo / DETALHES da Decoração:")
     
-    submit_button = st.form_submit_button("Salvar Encomenda (CRIAÇÃO)")
+    submit_button = st.form_submit_button("Salvar Encomenda")
 
     if submit_button:
         if nome_cliente and data_entrega and sabor_bolo: 
@@ -168,7 +168,7 @@ with st.form("form_nova_encomenda", clear_on_submit=True):
             }
             adicionar_evento(sheet, dados_para_sheet)
         else:
-            st.warning("O Nome do Cliente, o Sabor e a Data são obrigatórios. Não complique a receita.")
+            st.warning("O Nome do Cliente, o Sabor e a Data são obrigatórios.")
             
 
 st.divider() 
@@ -177,16 +177,16 @@ st.divider()
 
 # CONFIGURAÇÃO DO REFRESH DE 30 SEGUNDOS (30000 ms)
 st_autorefresh(interval=30000, key="data_refresh_key")
-st.info("🔄 **ATUALIZAÇÃO AUTOMÁTICA** (A cada 30 segundos). Mantenha a janela aberta apenas durante o uso.")
+st.info("🔄 **ATUALIZAÇÃO AUTOMÁTICA** (A cada 30 segundos).")
 
 
-st.header("📋 MINHAS ENCOMENDAS (O Calendário da Produção)")
+st.header("📋 MINHAS ENCOMENDAS")
 
 # CHAMADA CORRIGIDA: Não passa o argumento 'sheet'
 df_encomendas = carregar_eventos() 
 
 if df_encomendas.empty:
-    st.info("SEM REGISTROS DE ENCOMENDAS. O forno está frio.")
+    st.info("SEM REGISTROS DE ENCOMENDAS.")
 else:
     
     df_display = df_encomendas.copy()
