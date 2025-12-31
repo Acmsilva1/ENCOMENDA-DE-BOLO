@@ -26,6 +26,7 @@ COLUNAS_SHEET = {
 COLUNAS_INVERTIDAS = {v: k for k, v in COLUNAS_SHEET.items()}
 
 # --- CONFIGURAÇÃO DA GOVERNANÇA (Conexão Segura e Resiliente) ---
+# Usa cache_resource para garantir que a conexão só seja estabelecida uma vez por sessão.
 @st.cache_resource
 def conectar_sheets():
     """Tenta conectar ao Google Sheets usando Streamlit Secrets com lógica de Retentativa."""
@@ -51,9 +52,13 @@ def conectar_sheets():
 
 # --- FUNÇÕES CORE DO CRUD ---
 
+# CORRIGIDO: Não recebe o objeto 'sheet' como argumento para evitar UnhashableParamError.
 @st.cache_data(ttl=600) # Mantém no cache por 10 minutos por padrão
-def carregar_eventos(sheet):
-    """Lê todos os registros usando get_all_values e cria o DataFrame à força."""
+def carregar_eventos(): 
+    """Lê todos os registros, chamando a conexão segura internamente."""
+    
+    # Obtém o objeto sheet da função em cache
+    sheet = conectar_sheets() 
     
     if sheet is None: return pd.DataFrame()
     try:
@@ -124,6 +129,7 @@ def deletar_evento(sheet, id_evento):
 st.set_page_config(layout="wide")
 st.title("🎂 AGENDA DIGITAL DE ENCOMENDAS DE BOLO")
 
+# Obtém o objeto sheet (para ser usado nas funções de CRUD que modificam os dados)
 sheet = conectar_sheets()
 
 if sheet is None:
@@ -176,7 +182,8 @@ st.info("🔄 **ATUALIZAÇÃO AUTOMÁTICA** (A cada 30 segundos). Mantenha a jan
 
 st.header("📋 MINHAS ENCOMENDAS (O Calendário da Produção)")
 
-df_encomendas = carregar_eventos(sheet) 
+# CHAMADA CORRIGIDA: Não passa o argumento 'sheet'
+df_encomendas = carregar_eventos() 
 
 if df_encomendas.empty:
     st.info("SEM REGISTROS DE ENCOMENDAS. O forno está frio.")
