@@ -149,8 +149,8 @@ with st.form("form_nova_encomenda", clear_on_submit=True):
     
     with col2:
         hora_entrega = st.time_input("Horário Combinado:", time(9, 0)) 
-        opcoes_status_inicial = ['Pendente', 'Rascunho']
-        status_inicial = st.selectbox("Status Inicial:", opcoes_status_inicial)
+        # REMOVIDO: O campo de status inicial foi retirado daqui.
+        st.write("Novo registro será inserido como: **PENDENTE**") # Feedback visual
         st.write("") # Espaçador
         
     sabor_bolo = st.text_area("SABOR do Bolo / DETALHES da Decoração:")
@@ -164,7 +164,8 @@ with st.form("form_nova_encomenda", clear_on_submit=True):
                 'titulo': nome_cliente, 'descricao': sabor_bolo,
                 'data_evento': data_entrega.strftime('%Y-%m-%d'), 
                 'hora_evento': hora_entrega.strftime('%H:%M'),
-                'local': torre_apt, 'status': status_inicial
+                'local': torre_apt, 
+                'status': 'Pendente' # NOVO PADRÃO: SEMPRE PENDENTE
             }
             adicionar_evento(sheet, dados_para_sheet)
         else:
@@ -262,8 +263,17 @@ else:
                 
                 with col_local_status:
                     novo_torre_apt = st.text_input("Torre e APT (ou Endereço)", value=evento_dados['local'])
+                    
+                    # AJUSTE: VOLTA ÀS OPÇÕES ORIGINAIS DE 3 STATUS
                     opcoes_status_update = ['Pendente', 'Entregue', 'Cancelado']
-                    novo_status = st.selectbox("Status", opcoes_status_update, index=opcoes_status_update.index(evento_dados['status']))
+                    
+                    # Garantindo que o status atual seja mapeado para um índice válido (ou PENDENTE/0 se for um valor antigo)
+                    try:
+                        default_index = opcoes_status_update.index(evento_dados['status'])
+                    except ValueError:
+                        default_index = 0 # Assume 'Pendente' se o valor for inválido ou não encontrado.
+                        
+                    novo_status = st.selectbox("Status", opcoes_status_update, index=default_index)
 
                 update_button = st.form_submit_button("Salvar Atualizações da Encomenda (Update)")
 
